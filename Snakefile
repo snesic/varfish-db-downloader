@@ -3,21 +3,19 @@ from itertools import product
 import os
 import re
 import sys
-import textwrap
 import json
 
+from pytools.persistent_dict import PersistentDict
 from snakemake import shell
-from tools.sv_db_to_tsv import to_tsv
 
+from tools.sv_db_to_tsv import to_tsv
 
 # Ensure that the configuration file exists and then load it.
 if not os.path.exists("config.yaml"):
     print("No config.yaml exists yet. Try `cp config.yaml.example config.yaml`.", file=sys.stderr)
     sys.exit(1)
 
-
 configfile: "config.yaml"
-
 
 # Print configuration.
 print("Configuration:", file=sys.stderr)
@@ -35,29 +33,28 @@ CHROMS = CHROMS_NO_Y + ["Y"]
 #: List for collecting all result files below.
 ALL_RESULT = []
 
-
 def input_all(wildcards):
     return ALL_RESULT
 
 
 rule all:
-    input:
+   input:
         input_all,
-
+   shell:
+        "python tools/reporting.py"
 
 # Load all snakemake files `snakefiles/*/*.smk`.
 snakefiles = list(sorted(glob.glob("snakefiles/*/*.smk")))
 print("Loading Snakefiles...", file=sys.stderr)
 
 for path in snakefiles:
-
     include: path
-
 
 # Derive output overall output files from rules starting with prefix "output_".
 print("Constructing list of output files from all `result_*` rules...\n", file=sys.stderr)
 
 ALL_RESULT = []
+fileList = []
 for rule in workflow.rules:
     if rule.name.startswith("result_"):
         for genome_build in ("GRCh37", "GRCh38"):
@@ -74,3 +71,12 @@ for rule in workflow.rules:
                 for chrom, chrom_no_y in product(chroms, chroms_no_y):
                     path = re.sub(r"{([^,]+)(,.*)?}", r"{\1}", path)
                     ALL_RESULT.append(path.format(chrom=chrom, chrom_no_y=chrom_no_y, **vals))
+    if rule.name.endswith('download'):
+        for genome_build in ("GRCh37", "GRCh38"):
+            for kind in ("genomes", "exomes"):
+                vals = {**config, "genome_build": genome_build, "kind": kind}
+                for path in rule.output:
+                    file = path.format(**vals)
+                    fileList.append(str(file))
+storage = PersistentDict("reportstorage")
+storage.store("files", fileList)
