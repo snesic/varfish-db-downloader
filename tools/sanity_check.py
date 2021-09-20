@@ -6,8 +6,10 @@ from os import walk
 
 path = '/Users/snesic/sciebo/Development/WES/varfish/varfish-db-downloader/files'
 
-def get_ref_from_filename(file):
-    return {'filename' : file.split('/')[-1], 'reference' : file.split('/')[1]}
+def extract_reference_from_filename(file):
+
+    ref = [i for i in ['GRCh37', 'GRCh38'] if file.lower().find(i.lower()) > 0]
+    return 'No Ref' if len(ref) == 0 else ', '.join(ref)
 
 def check_vcf(file):
     # ------ read line by line
@@ -32,28 +34,31 @@ def check_vcf(file):
     df.columns =['chr', 'count']
     df.loc[len(df.index)] = ['.', df['count'].sum()]
     df['file'] = file
+    df['Reference'] = extract_reference_from_filename(file)
 
-    return df[['file', 'chr', 'count']]
+    return df[['file', 'Reference', 'chr', 'count']]
+
+
 
 # read a file and take only unique values
 # for each column
 # create a long format for easier manipulation
 
 def file_to_dataframe(file):
-    print('Process: ' + file)
 
+    print('Process: ' + file)
     df = pd.read_csv(file, comment="#", sep='\t', low_memory=False)
     ##TODO: check if pandas handles na values properly, maybe redefine initial na_values list..
     # create a dataframe where each row is one column name and its type
     df_types = pd.DataFrame(df.dtypes).reset_index()
     df_types.columns = ['col_name', 'type']
 
-    # in case of numerical columns, calculate min and max
+    # in case of numerical columns, calculate MIN and MAX
     df_stat = df.select_dtypes(exclude=['object'])
     if df_stat.shape[1] == 0:
         df_stat = pd.DataFrame(columns=['col_name', 'stat'])
     else:
-        df_stat = df_stat.apply(lambda x: str(min(x)) + ', ' + str(max(x)))
+        df_stat = df_stat.apply(lambda x: str(x.dropna().min()) + ', ' + str(x.dropna().max()))
         df_stat = pd.DataFrame(df_stat).reset_index()
         df_stat.columns = ['col_name', 'stat']
 
@@ -80,8 +85,11 @@ def file_to_dataframe(file):
 
     out.col_item = out.col_item.astype(str)
     out['filename'] = file
+    out['Reference'] = extract_reference_from_filename(file)
 
     return out
+
+
 
 # in case files are read in chunks
 # append all of them
@@ -89,14 +97,14 @@ def merge_tsv_dataframes(list_df):
 
     df = pd.concat(list_df)
 
-    df = df.groupby(['filename', 'col_name', 'col_item'])
+    df = df.groupby(['filename', 'Reference', 'col_name', 'col_item'])
     df = df.aggregate({'count' : sum,
                        'type' : lambda x: ', '.join(x.astype('str').unique()),
                        'stat' : lambda x: ', '.join(x.fillna(''))}).reset_index()
 
-
-
     return df
+
+
 
 def chr_summary_dataframe(df):
 
@@ -107,7 +115,7 @@ def chr_summary_dataframe(df):
 
     # intersect values of each column with chrs
     df_chr = df[df.col_item != 'continuous']
-    df_chr = df_chr.groupby(['filename', 'col_name'])
+    df_chr = df_chr.groupby(['filename', 'Reference', 'col_name'])
     df_chr = df_chr.aggregate({'col_item' : lambda x: x.str.lower().replace('chr', '').unique()}).reset_index()
     df_chr = df_chr[~df_chr.col_item.isna()] # boolinas are set to na after converstion to string
 
@@ -120,12 +128,19 @@ def chr_summary_dataframe(df):
 
     out = df[df.col_name.isin(chr_cols)]
     out = out.drop(columns=['type', 'stat'])
-    out.columns = ['filename', 'col_name', 'col_item', 'count']
-
-
-
-
+    out.columns = ['filename', 'Reference', 'col_name', 'col_item', 'count']
+    out
     return out
+
+
+
+def group_values_per_column(df):
+
+    dd = df.groupby(['filename', 'Reference', 'col_name', 'type', 'stat'])
+    dd = dd.aggregate({'col_item' : lambda x: ', '.join(x.str.replace('"""', '').str.strip('{}').str.split(r',|\|').explode().unique())}).reset_index()
+    return dd[['filename', 'Reference', 'col_name', 'col_item', 'type', 'stat']]
+
+
 
 
 # ---- Collect all the files
@@ -148,14 +163,16 @@ tsvs = [i for i in files if i.endswith('.tsv')]
 list_df = [file_to_dataframe(i) for i in tsvs]
 
 df = merge_tsv_dataframes(list_df)
-
-
 # only chromosome summary
 df_chr = chr_summary_dataframe(df)
+
+# General column summary
+df = group_values_per_column(df)
 
 
 # ---- save output ----
 df_chr.to_csv('sanity_check_chr_summary.tsv', sep='\t', index=False, mode='w')
+df.to_csv('sanity_check_general_summary.tsv', sep='\t', index=False, mode='w')
 
 
 #### ----- main - once everything finish copy the code here!
