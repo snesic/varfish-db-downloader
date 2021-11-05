@@ -13,8 +13,8 @@ rule result_GRChXX_extra_annos_revel_release_info:
         download_date="[^/]+",
     shell:
         r"""
-        echo -e "table\tversion\tgenomebuild\tnull_value\nExtraAnno\t{wildcards.download_date}\t{wildcards.genome_build}\t" > {output.anno}
-        echo -e "table\tversion\tgenomebuild\tnull_value\nExtraAnnoField\t{wildcards.download_date}\t{wildcards.genome_build}\t" > {output.annofield}
+        echo -e "table\tversion\tgenomebuild\tnull_value\nExtraAnno_revel\t{wildcards.download_date}\t{wildcards.genome_build}\t" > {output.anno}
+        echo -e "table\tversion\tgenomebuild\tnull_value\nExtraAnnoField_revel\t{wildcards.download_date}\t{wildcards.genome_build}\t" > {output.annofield}
         """
 
 
