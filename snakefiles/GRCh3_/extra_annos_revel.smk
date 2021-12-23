@@ -5,7 +5,7 @@ import tqdm
 rule result_GRChXX_extra_annos_revel_release_info:
     input:
         "{genome_build}/extra_annos_revel/{download_date}/ExtraAnno_revel.tsv",
-        "{genome_build}/extra_annos_revel/{download_date}/ExtraAnnoField.tsv",
+        "{genome_build}/extra_annos_revel/{download_date}/ExtraAnnoField_revel.tsv",
     output:
         anno="{genome_build}/extra_annos_revel/{download_date}/ExtraAnno_revel.release_info",
         annofield="{genome_build}/extra_annos_revel/{download_date}/ExtraAnnoField_revel.release_info",
